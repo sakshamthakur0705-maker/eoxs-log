@@ -28,7 +28,12 @@ app.get('/health', (req, res) => {
 
 // Main automation endpoint
 app.post('/automate', async (req, res) => {
+    // Allow long running requests (Render default is short)
     try {
+        // Per-request timeout extension (15 minutes)
+        req.setTimeout(15 * 60 * 1000);
+        res.setTimeout(15 * 60 * 1000);
+
         console.log('🚀 Received automation request:', req.body);
         
         // Set environment variables from request body
@@ -46,7 +51,18 @@ app.post('/automate', async (req, res) => {
             process.env.HEADLESS = 'true';
         }
         
-        // Create and run automation
+        // If client requests async mode, acknowledge early
+        const waitForResponse = String(req.body.waitForResponse ?? 'true') === 'true';
+        if (!waitForResponse) {
+            // Run without blocking the response
+            (async () => {
+                const automationBg = new EOXSPlaywrightAutomationWithLog();
+                await automationBg.run().catch(err => console.error('❌ Background run failed:', err));
+            })();
+            return res.status(202).json({ accepted: true, message: 'Automation started', timestamp: new Date().toISOString() });
+        }
+
+        // Create and run automation (blocking until finished)
         const automation = new EOXSPlaywrightAutomationWithLog();
         const result = await automation.run();
         
@@ -63,9 +79,8 @@ app.post('/automate', async (req, res) => {
         
     } catch (error) {
         console.error('❌ Automation failed:', error);
-        
-        // Restore original environment
-        process.env = originalEnv;
+        // Attempt best-effort env restore if available
+        try { if (typeof originalEnv !== 'undefined') process.env = originalEnv; } catch {}
         
         res.status(500).json({
             success: false,
@@ -86,10 +101,21 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-app.listen(port, () => {
+const server = app.listen(port, () => {
     console.log(`🚀 EOXS Log Automation server running on port ${port}`);
     console.log(`📋 Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`🔧 Headless mode: ${process.env.HEADLESS || 'false'}`);
 });
+
+// Extend server timeouts (15 minutes) for long Playwright sessions
+try {
+    server.headersTimeout = 16 * 60 * 1000; // headers timeout slightly higher
+    server.requestTimeout = 15 * 60 * 1000; // node >=18
+    if (typeof server.setTimeout === 'function') {
+        server.setTimeout(15 * 60 * 1000);
+    }
+} catch (e) {
+    console.warn('⚠️ Could not extend server timeouts:', e?.message);
+}
 
 module.exports = app;
