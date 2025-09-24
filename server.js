@@ -1,8 +1,12 @@
 const express = require('express');
 const EOXSPlaywrightAutomationWithLog = require('./eoxs_playwright_automation_with_log');
+const { v4: uuidv4 } = require('uuid');
 
 const app = express();
 const port = process.env.PORT || 3000;
+
+// In-memory job store (use Redis in production)
+const jobs = new Map();
 
 // Middleware
 app.use(express.json());
@@ -16,7 +20,9 @@ app.get('/', (req, res) => {
         version: '1.0.0',
         endpoints: {
             'POST /automate': 'Run EOXS automation with provided parameters',
-            'GET /health': 'Health check endpoint'
+            'GET /health': 'Health check endpoint',
+            'GET /healthz': 'Health check endpoint (for platforms)',
+            'GET /status/:jobId': 'Check job status by ID'
         }
     });
 });
@@ -24,6 +30,34 @@ app.get('/', (req, res) => {
 // Health check endpoint
 app.get('/health', (req, res) => {
     res.json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
+// Alias for platforms that probe /healthz
+app.get('/healthz', (req, res) => {
+    res.json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
+// Job status endpoint
+app.get('/status/:jobId', (req, res) => {
+    const jobId = req.params.jobId;
+    const job = jobs.get(jobId);
+    
+    if (!job) {
+        return res.status(404).json({
+            success: false,
+            error: 'Job not found',
+            jobId: jobId
+        });
+    }
+    
+    res.json({
+        jobId: jobId,
+        status: job.status,
+        result: job.result,
+        createdAt: job.createdAt,
+        completedAt: job.completedAt,
+        duration: job.completedAt ? (new Date(job.completedAt) - new Date(job.createdAt)) / 1000 : null
+    });
 });
 
 // Main automation endpoint
@@ -54,12 +88,39 @@ app.post('/automate', async (req, res) => {
         // If client requests async mode, acknowledge early
         const waitForResponse = String(req.body.waitForResponse ?? 'true') === 'true';
         if (!waitForResponse) {
+            // Create job and run in background
+            const jobId = uuidv4();
+            const job = {
+                id: jobId,
+                status: 'running',
+                createdAt: new Date().toISOString(),
+                result: null,
+                completedAt: null
+            };
+            jobs.set(jobId, job);
+            
             // Run without blocking the response
             (async () => {
-                const automationBg = new EOXSPlaywrightAutomationWithLog();
-                await automationBg.run().catch(err => console.error('❌ Background run failed:', err));
+                try {
+                    const automationBg = new EOXSPlaywrightAutomationWithLog();
+                    const result = await automationBg.run();
+                    job.status = 'completed';
+                    job.result = result;
+                    job.completedAt = new Date().toISOString();
+                } catch (error) {
+                    job.status = 'failed';
+                    job.result = { success: false, error: error.message };
+                    job.completedAt = new Date().toISOString();
+                }
             })();
-            return res.status(202).json({ accepted: true, message: 'Automation started', timestamp: new Date().toISOString() });
+            
+            return res.status(202).json({ 
+                accepted: true, 
+                message: 'Automation started', 
+                jobId: jobId,
+                statusUrl: `/status/${jobId}`,
+                timestamp: new Date().toISOString() 
+            });
         }
 
         // Create and run automation (blocking until finished)
