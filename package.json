@@ -2,7 +2,7 @@
   "name": "eoxs-log-automation",
   "version": "1.0.0",
   "description": "Automated ticket creation and log note posting for EOXS platform using Playwright",
-  "main": "eoxs_playwright_automation_with_log.js",
+  "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "automate": "node eoxs_playwright_automation_with_log.js",
