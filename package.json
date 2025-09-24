@@ -1,0 +1,43 @@
+{
+  "name": "eoxs-log-automation",
+  "version": "1.0.0",
+  "description": "Automated ticket creation and log note posting for EOXS platform using Playwright",
+  "main": "eoxs_playwright_automation_with_log.js",
+  "scripts": {
+    "start": "node server.js",
+    "automate": "node eoxs_playwright_automation_with_log.js",
+    "create-ticket": "node eoxs_playwright_automation_with_log.js",
+    "log-note": "TICKET_TITLE=\"$1\" LOG_NOTE=\"$2\" node eoxs_playwright_automation_with_log.js",
+    "install-browsers": "npx playwright install chromium",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "eoxs",
+    "ticket",
+    "automation",
+    "playwright",
+    "log-note",
+    "web-automation",
+    "enterprise",
+    "support",
+    "n8n"
+  ],
+  "author": "Sahaj Katiyar",
+  "license": "MIT",
+  "dependencies": {
+    "playwright": "^1.40.0",
+    "express": "^4.18.2"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/eoxs-log-automation.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/eoxs-log-automation/issues"
+  },
+  "homepage": "https://github.com/yourusername/eoxs-log-automation#readme"
+}
